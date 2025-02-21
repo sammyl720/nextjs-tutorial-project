@@ -13,18 +13,12 @@ const FormSchema = z.object({
   date: z.string(),
 });
 
-const CreateInvoice = FormSchema.omit({ id: true, date: true });
+const InvoiceDTO = FormSchema.omit({ id: true, date: true });
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: "require" });
 
 export async function createInvoice(formData: FormData) {
-  const { customerId, amount, status } = CreateInvoice.parse({
-    customerId: formData.get("customerId"),
-    amount: formData.get("amount"),
-    status: formData.get("status"),
-  });
-
-  const amountInCents = amount * 100;
+  const { customerId, amountInCents, status } = toInvoiceDTO(formData);
   const date = new Date().toISOString().split("T")[0];
 
   await sql`
@@ -34,4 +28,28 @@ export async function createInvoice(formData: FormData) {
 
   revalidatePath("/dashboard/invoices");
   redirect("/dashboard/invoices");
+}
+
+export async function updateInvoice(id: string, formData: FormData) {
+  const { customerId, amountInCents, status } = toInvoiceDTO(formData);
+
+  await sql`
+  UPDATE invoices
+  SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
+  WHERE id = ${id}
+  `;
+
+  revalidatePath("/dashboard/invoices");
+  redirect("/dashboard/invoices");
+}
+
+function toInvoiceDTO(formData: FormData) {
+  const dto = InvoiceDTO.parse({
+    customerId: formData.get("customerId"),
+    amount: formData.get("amount"),
+    status: formData.get("status"),
+  });
+
+  const amountInCents = dto.amount * 100;
+  return { ...dto, amountInCents };
 }
